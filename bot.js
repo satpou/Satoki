@@ -1,3 +1,13 @@
+// Taruh di paling atas bot.js, sebelum require lainnya
+const { execSync } = require('child_process');
+try {
+  console.log('=== FINDING CHROMIUM ===');
+  console.log(execSync('which chromium 2>/dev/null || echo "not found"').toString());
+  console.log(execSync('which chromium-browser 2>/dev/null || echo "not found"').toString());
+  console.log(execSync('find /nix -name "chromium" -type f 2>/dev/null | head -5 || echo "not found in /nix"').toString());
+  console.log(execSync('find /usr -name "chrom*" -type f 2>/dev/null | head -5 || echo "not found in /usr"').toString());
+} catch(e) {}
+
 require('dotenv').config();
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
