@@ -1,4 +1,3 @@
-// Taruh di paling atas bot.js, sebelum require lainnya
 const { execSync } = require('child_process');
 try {
   console.log('=== FINDING CHROMIUM ===');

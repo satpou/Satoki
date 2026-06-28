@@ -24,11 +24,6 @@ RUN npm install
 COPY . .
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-
-# Print path chromium saat build
-RUN echo "=== CHROMIUM PATH ===" && \
-    which chromium || echo "chromium not found" && \
-    which chromium-browser || echo "chromium-browser not found" && \
-    find /usr -name "chrom*" 2>/dev/null
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 CMD ["node", "bot.js"]
