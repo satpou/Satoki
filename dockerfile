@@ -25,6 +25,10 @@ COPY . .
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
-RUN which chromium || which chromium-browser || find / -name "chromium*" -type f 2>/dev/null | head -5
+# Print path chromium saat build
+RUN echo "=== CHROMIUM PATH ===" && \
+    which chromium || echo "chromium not found" && \
+    which chromium-browser || echo "chromium-browser not found" && \
+    find /usr -name "chrom*" 2>/dev/null
 
 CMD ["node", "bot.js"]
