@@ -3,20 +3,17 @@ try {
   console.log('=== FINDING CHROMIUM ===');
   console.log(execSync('which chromium 2>/dev/null || echo "not found"').toString());
   console.log(execSync('which chromium-browser 2>/dev/null || echo "not found"').toString());
-  console.log(execSync('find /nix -name "chromium" -type f 2>/dev/null | head -5 || echo "not found in /nix"').toString());
   console.log(execSync('find /usr -name "chrom*" -type f 2>/dev/null | head -5 || echo "not found in /usr"').toString());
 } catch(e) {}
 
 require('dotenv').config();
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
+const QRCode = require('qrcode');
 
 const DEVELOPER_NUMBER = process.env.DEVELOPER_NUMBER;
 
-const chromiumPath = 
-  process.env.PUPPETEER_EXECUTABLE_PATH ||
-  '/usr/bin/chromium' ||
-  '/usr/bin/chromium-browser';
+const chromiumPath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium';
 
 const client = new Client({
   authStrategy: new LocalAuth(),
@@ -36,15 +33,16 @@ const client = new Client({
   }
 });
 
-const qrcode = require('qrcode-terminal');
-const QRCode = require('qrcode');
-
 client.on('qr', async qr => {
   qrcode.generate(qr, { small: true });
-  
-  const qrUrl = await QRCode.toDataURL(qr);
-  console.log('QR Code URL (copy ke browser):');
-  console.log(`data:image/png;base64,${qrUrl.split(',')[1]}`);
+  try {
+    const qrUrl = await QRCode.toDataURL(qr);
+    console.log('\n=== QR CODE URL (paste ke browser) ===');
+    console.log(qrUrl);
+    console.log('=======================================\n');
+  } catch(e) {
+    console.log('QR URL error:', e.message);
+  }
 });
 
 client.on('ready', () => {
@@ -167,7 +165,6 @@ client.on('message', async msg => {
         return;
       }
 
-      // ✅ Perbaikan: await msg.getChat() bukan msg.chat.then()
       const chat = await msg.getChat();
       await chat.sendMessage(media, {
         sendMediaAsSticker: true,
@@ -239,7 +236,6 @@ client.on('message', async msg => {
       '💡 Contoh: !calc 10*5 | !random 1 10',
     ].join('\n');
     msg.reply(menu);
-
   }
 });
 
