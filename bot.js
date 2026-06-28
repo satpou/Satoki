@@ -36,9 +36,15 @@ const client = new Client({
   }
 });
 
-client.on('qr', qr => {
+const qrcode = require('qrcode-terminal');
+const QRCode = require('qrcode');
+
+client.on('qr', async qr => {
   qrcode.generate(qr, { small: true });
-  console.log('Scan QR code untuk login');
+  
+  const qrUrl = await QRCode.toDataURL(qr);
+  console.log('QR Code URL (copy ke browser):');
+  console.log(`data:image/png;base64,${qrUrl.split(',')[1]}`);
 });
 
 client.on('ready', () => {
