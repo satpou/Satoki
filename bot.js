@@ -4,11 +4,16 @@ const qrcode = require('qrcode-terminal');
 
 const DEVELOPER_NUMBER = process.env.DEVELOPER_NUMBER;
 
+const chromiumPath = 
+  process.env.PUPPETEER_EXECUTABLE_PATH ||
+  '/usr/bin/chromium' ||
+  '/usr/bin/chromium-browser';
+
 const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
     headless: true,
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
+    executablePath: chromiumPath,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',

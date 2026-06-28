@@ -1,6 +1,5 @@
 FROM node:22-slim
 
-# Install Chrome dependencies
 RUN apt-get update && apt-get install -y \
     chromium \
     libglib2.0-0 \
@@ -25,6 +24,7 @@ RUN npm install
 COPY . .
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
+RUN which chromium || which chromium-browser || find / -name "chromium*" -type f 2>/dev/null | head -5
 
 CMD ["node", "bot.js"]
