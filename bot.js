@@ -63,13 +63,17 @@ client.on('message', async msg => {
 
   // ─── JAM ────────────────────────────────────────────
   } else if (cmd === '!jam') {
+    const options = { timeZone: 'Asia/Jakarta' };
+    
     const waktu = new Date().toLocaleTimeString('id-ID', {
+      ...options,
       hour: '2-digit', minute: '2-digit', second: '2-digit'
     });
     const tanggal = new Date().toLocaleDateString('id-ID', {
+      ...options,
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     });
-    msg.reply(`🕐 *Waktu Sekarang*\n⏰ ${waktu}\n📅 ${tanggal}`);
+    msg.reply(`🕐 *Waktu Sekarang (WIB)*\n⏰ ${waktu}\n📅 ${tanggal}`);
 
   // ─── ECHO ────────────────────────────────────────────
   } else if (cmd.startsWith('!echo ')) {
