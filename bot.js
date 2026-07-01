@@ -269,7 +269,7 @@ client.on('message', async msg => {
       `🤖 *Info Bot*\n` +
       `━━━━━━━━━━━━━━\n` +
       `📌 Nama: SatPou Bot\n` +
-      `📌 Versi: 1.0.0\n` +
+      `📌 Versi: 1.5.0\n` +
       `⏱️ Uptime: ${jam}j ${menit}m ${detik}d\n` +
       `━━━━━━━━━━━━━━`
     );
@@ -528,7 +528,7 @@ client.on('message', async msg => {
   // ─── MENU / BANTUAN ──────────────────────────────────
   } else if (cmd === '!menu' || cmd === '!bantuan') {
     const menu = [
-      '🤖 *SatPou Bot v1.0*',
+      '🤖 *SatPou Bot v1.5*',
       '━━━━━━━━━━━━━━',
       '',
       '🔧 *Umum*',
