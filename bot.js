@@ -9,7 +9,8 @@ try {
 require('dotenv').config();
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const QRCode = require('qrcode');
+const QRCodeLib = require('qrcode');
+const translate = require('translate');
 
 const DEVELOPER_NUMBER = process.env.DEVELOPER_NUMBER;
 
@@ -25,6 +26,8 @@ const MENFESS_CONFIG = {
   SESSION_TIMEOUT: 3600000,
   MAX_HISTORY: 50
 };
+
+const todoList = [];
 
 function generateSessionId() {
   return `mfs_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -83,7 +86,7 @@ function cleanupExpiredSessions() {
 
 setInterval(cleanupExpiredSessions, 300000);
 
-const chromiumPath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium';
+const chromiumPath = process.env.PUPPETEER_EXECUTABLE_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 const client = new Client({
   authStrategy: new LocalAuth(),
@@ -106,7 +109,7 @@ const client = new Client({
 client.on('qr', async qr => {
   qrcode.generate(qr, { small: true });
   try {
-    const qrUrl = await QRCode.toDataURL(qr);
+    const qrUrl = await QRCodeLib.toDataURL(qr);
     console.log('\n=== QR CODE URL (paste ke browser) ===');
     console.log(qrUrl);
     console.log('=======================================\n');
@@ -172,13 +175,86 @@ client.on('message', async msg => {
       msg.reply('⚠️ Format salah. Contoh: *!calc 10 * 5 + 2*');
     }
 
-  // ─── DADU ────────────────────────────────────────────
+  // ─── QR CODE ────────────────────────────────────────
+  } else if (cmd.startsWith('!qr ')) {
+    const text = msg.body.substring(4).trim();
+    if (!text) {
+      msg.reply('⚠️ Format: *!qr <teks>*\nContoh: *!qr https://github.com*');
+      return;
+    }
+    try {
+      const qrDataUrl = await QRCodeLib.toDataURL(text, { width: 300, margin: 2 });
+      const chat = await msg.getChat();
+      await chat.sendMessage(MessageMedia.fromDataURL(qrDataUrl), { caption: `📱 *QR Code*\n\`\`\`${text}\`\`\`` });
+    } catch (e) {
+      console.error('QR error:', e);
+      msg.reply('❌ Gagal membuat QR Code.');
+    }
+
+  // ─── SHORT URL ──────────────────────────────────────
+  } else if (cmd.startsWith('!short ')) {
+    const url = msg.body.substring(7).trim();
+    if (!url) {
+      msg.reply('⚠️ Format: *!short <url>*\nContoh: *!short https://example.com/very/long/url*');
+      return;
+    }
+    try {
+      const regex = /^(https?:\/\/)?([\w-]+\.)+[\w-]+(\/[\w-./?%&=]*)?$/;
+      if (!regex.test(url)) {
+        msg.reply('⚠️ URL tidak valid. Contoh: *!short https://example.com*');
+        return;
+      }
+      const fullUrl = url.startsWith('http') ? url : 'https://' + url;
+      const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(fullUrl)}`);
+      const shortUrl = await response.text();
+      if (shortUrl.startsWith('Error')) {
+        msg.reply('❌ Gagal memperpendek URL.');
+      } else {
+        msg.reply(`🔗 *URL Dipendekkan*\n━━━━━━━━━━━━━━\n📎 Asli: ${fullUrl}\n✨ Pendek: ${shortUrl}\n━━━━━━━━━━━━━━`);
+      }
+    } catch (e) {
+      console.error('Short URL error:', e);
+      msg.reply('❌ Gagal memperpendek URL.');
+    }
+
+  // ─── TRANSLATE ──────────────────────────────────────
+  } else if (cmd.startsWith('!translate ')) {
+    const parts = msg.body.substring(11).split(' ');
+    if (parts.length < 2) {
+      msg.reply(
+        '⚠️ *Format Translate*\n━━━━━━━━━━━━━━\n' +
+        '!translate <kode_bahasa> <teks>\n\n' +
+        'Contoh:\n' +
+        '!translate en Halo dunia\n' +
+        '!translate id Good morning\n' +
+        '━━━━━━━━━━━━━━\n' +
+        'Kode bahasa: en, id, es, fr, de, ja, ko, zh, ar, dll'
+      );
+      return;
+    }
+    const targetLang = parts[0];
+    const textToTranslate = parts.slice(1).join(' ');
+    try {
+      translate.engine = 'google';
+      const result = await translate(textToTranslate, targetLang);
+      msg.reply(
+        `🌐 *Terjemahan*\n━━━━━━━━━━━━━━\n' +
+        '📝 Asli: ${textToTranslate}\n' +
+        '🌍 Hasil (${targetLang}): ${result}\n' +
+        '━━━━━━━━━━━━━━`
+      );
+    } catch (e) {
+      console.error('Translate error:', e);
+      msg.reply('❌ Gagal menerjemahkan. Coba lagi.');
+    }
+
+  // ─── DADU ───────────────────────────────────────────
   } else if (cmd === '!dadu') {
     const hasil = Math.floor(Math.random() * 6) + 1;
     const emoji = ['', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣'];
     msg.reply(`🎲 *Lempar Dadu*\nHasil: ${emoji[hasil]} (*${hasil}*)`);
 
-  // ─── KOIN ────────────────────────────────────────────
+  // ─── KOIN ───────────────────────────────────────────
   } else if (cmd === '!koin') {
     const hasil = Math.random() < 0.5 ? '👑 Kepala' : '🪙 Ekor';
     msg.reply(`🪙 *Lempar Koin*\nHasil: *${hasil}*`);
@@ -197,6 +273,52 @@ client.on('message', async msg => {
       `⏱️ Uptime: ${jam}j ${menit}m ${detik}d\n` +
       `━━━━━━━━━━━━━━`
     );
+
+  // ─── TODO ADD ───────────────────────────────────────
+  } else if (cmd.startsWith('!todo add ')) {
+    const task = msg.body.substring(10).trim();
+    if (!task) {
+      msg.reply('⚠️ Format: *!todo add <tugas>*\nContoh: *!todo add Kerjakan laporan*');
+      return;
+    }
+    const id = todoList.length + 1;
+    todoList.push({ id, task, done: false, createdAt: Date.now() });
+    msg.reply(`✅ *Tugas Ditambahkan*\n━━━━━━━━━━━━━━\n📝 ${id}. ${task}\n━━━━━━━━━━━━━━`);
+
+  // ─── TODO LIST ───────────────────────────────────────
+  } else if (cmd === '!todo list') {
+    if (todoList.length === 0) {
+      msg.reply('📋 *Daftar Tugas*\n━━━━━━━━━━━━━━\nBelum ada tugas.\n━━━━━━━━━━━━━━');
+    } else {
+      const active = todoList.filter(t => !t.done);
+      const completed = todoList.filter(t => t.done);
+      let response = '📋 *Daftar Tugas*\n━━━━━━━━━━━━━━\n';
+      if (active.length > 0) {
+        response += '📌 Aktif:\n';
+        active.forEach(t => {
+          response += `${t.id}. ${t.task}\n`;
+        });
+      }
+      if (completed.length > 0) {
+        response += '\n✅ Selesai:\n';
+        completed.forEach(t => {
+          response += `${t.id}. ~~${t.task}~~\n`;
+        });
+      }
+      response += '━━━━━━━━━━━━━━';
+      msg.reply(response);
+    }
+
+  // ─── TODO DONE ───────────────────────────────────────
+  } else if (cmd.startsWith('!todo done ')) {
+    const id = parseInt(msg.body.substring(11).trim());
+    const task = todoList.find(t => t.id === id);
+    if (!task) {
+      msg.reply(`⚠️ Tugas dengan ID *${id}* tidak ditemukan.`);
+      return;
+    }
+    task.done = true;
+    msg.reply(`✅ *Tugas Selesai*\n━━━━━━━━━━━━━━\n📝 ${task.task}\n━━━━━━━━━━━━━━`);
 
   // ─── STIKER ──────────────────────────────────────────
   } else if (cmd === '!stiker' || cmd === '!sticker') {
@@ -251,136 +373,136 @@ client.on('message', async msg => {
       msg.reply('❌ Gagal membuat stiker. Pastikan gambar valid dan coba lagi.');
     }
 
-   // ─── MENFESS ──────────────────────────────────────────
-   } else if (cmd.startsWith('!menfess ')) {
-     if (!checkRateLimit(msg.from)) {
-       msg.reply('⏱️ *Rate limit*\nKamu sudah mengirim banyak menfess. Tunggu sebentar.');
-       return;
-     }
+  // ─── MENFESS ──────────────────────────────────────────
+  } else if (cmd.startsWith('!menfess ')) {
+    if (!checkRateLimit(msg.from)) {
+      msg.reply('⏱️ *Rate limit*\nKamu sudah mengirim banyak menfess. Tunggu sebentar.');
+      return;
+    }
 
-     const args = msg.body.split(' ');
-     if (args.length < 3) {
-       msg.reply(
-         '📨 *Format Menfess*\n' +
-         '━━━━━━━━━━━━━━\n' +
-         '!menfess <nomor> <pesan>\n\n' +
-         'Contoh:\n' +
-         '!menfess 6281234567890 Halo, semangat kuliah!\n' +
-         '━━━━━━━━━━━━━━\n' +
-         '⚠️ Nomor harus valid (62xxx)'
-       );
-       return;
-     }
+    const menfessArgs = msg.body.split(' ');
+    if (menfessArgs.length < 3) {
+      msg.reply(
+        '📨 *Format Menfess*\n' +
+        '━━━━━━━━━━━━━━\n' +
+        '!menfess <nomor> <pesan>\n\n' +
+        'Contoh:\n' +
+        '!menfess 6281234567890 Halo, semangat kuliah!\n' +
+        '━━━━━━━━━━━━━━\n' +
+        '⚠️ Nomor harus valid (62xxx)'
+      );
+      return;
+    }
 
-     const receiverNumber = formatPhoneNumber(args[1]);
-     const menfessText = msg.body.substring(msg.body.indexOf(args[2])).trim();
+    const receiverNumber = formatPhoneNumber(menfessArgs[1]);
+    const menfessText = msg.body.substring(msg.body.indexOf(menfessArgs[2])).trim();
 
-     if (menfessText.length > MENFESS_CONFIG.MAX_MESSAGE_LENGTH) {
-       msg.reply(`⚠️ Pesan terlalu panjang. Maksimal ${MENFESS_CONFIG.MAX_MESSAGE_LENGTH} karakter.`);
-       return;
-     }
+    if (menfessText.length > MENFESS_CONFIG.MAX_MESSAGE_LENGTH) {
+      msg.reply(`⚠️ Pesan terlalu panjang. Maksimal ${MENFESS_CONFIG.MAX_MESSAGE_LENGTH} karakter.`);
+      return;
+    }
 
-     if (userSessions.has(msg.from)) {
-       msg.reply('❌ Kamu masih dalam sesi menfess sebelumnya.\nGunakan *!stopmenfess* untuk keluar terlebih dahulu.');
-       return;
-     }
+    if (userSessions.has(msg.from)) {
+      msg.reply('❌ Kamu masih dalam sesi menfess sebelumnya.\nGunakan *!stopmenfess* untuk keluar terlebih dahulu.');
+      return;
+    }
 
-     const sessionId = generateSessionId();
-     menfessSessions.set(sessionId, {
-       sender: msg.from,
-       receiver: receiverNumber,
-       createdAt: Date.now(),
-       active: true
-     });
-     
-     userSessions.set(msg.from, sessionId);
-     userSessions.set(receiverNumber, sessionId);
+    const sessionId = generateSessionId();
+    menfessSessions.set(sessionId, {
+      sender: msg.from,
+      receiver: receiverNumber,
+      createdAt: Date.now(),
+      active: true
+    });
+    
+    userSessions.set(msg.from, sessionId);
+    userSessions.set(receiverNumber, sessionId);
 
-     msg.reply('✅ *Menfess terkirim!*\n⏳ Menunggu balasan dari penerima...');
+    msg.reply('✅ *Menfess terkirim!*\n⏳ Menunggu balasan dari penerima...');
 
-     try {
-       await client.sendMessage(
-         receiverNumber,
-         `📨 *Menfess Baru*\n━━━━━━━━━━━━━━\n💌 ${menfessText}\n\n❓ Pengirim disembunyikan.\n\n📤 Balas dengan:\n*!balas <pesan>*\n━━━━━━━━━━━━━━`
-       );
-     } catch (e) {
-       console.error('Menfess send error:', e);
-       msg.reply('⚠️ Gagal mengirim menfess. Nomor tujuan mungkin tidak valid.');
-       menfessSessions.delete(sessionId);
-       userSessions.delete(msg.from);
-     }
+    try {
+      await client.sendMessage(
+        receiverNumber,
+        `📨 *Menfess Baru*\n━━━━━━━━━━━━━━\n💌 ${menfessText}\n\n❓ Pengirim disembunyikan.\n\n📤 Balas dengan:\n*!balas <pesan>*\n━━━━━━━━━━━━━━`
+      );
+    } catch (e) {
+      console.error('Menfess send error:', e);
+      msg.reply('⚠️ Gagal mengirim menfess. Nomor tujuan mungkin tidak valid.');
+      menfessSessions.delete(sessionId);
+      userSessions.delete(msg.from);
+    }
 
-   // ─── BALAS MENFESS ─────────────────────────────────────
-   } else if (cmd.startsWith('!balas ')) {
-     const userSession = userSessions.get(msg.from);
-     if (!userSession) {
-       msg.reply('⚠️ Kamu tidak memiliki sesi menfess aktif.\nGunakan *!menfess <nomor> <pesan>* untuk memulai.');
-       return;
-     }
+  // ─── BALAS MENFESS ─────────────────────────────────────
+  } else if (cmd.startsWith('!balas ')) {
+    const userSession = userSessions.get(msg.from);
+    if (!userSession) {
+      msg.reply('⚠️ Kamu tidak memiliki sesi menfess aktif.\nGunakan *!menfess <nomor> <pesan>* untuk memulai.');
+      return;
+    }
 
-     const session = menfessSessions.get(userSession);
-     if (!session) {
-       msg.reply('❌ Sesi menfess sudah berakhir.');
-       userSessions.delete(msg.from);
-       return;
-     }
+    const session = menfessSessions.get(userSession);
+    if (!session) {
+      msg.reply('❌ Sesi menfess sudah berakhir.');
+      userSessions.delete(msg.from);
+      return;
+    }
 
-     const replyText = msg.body.substring(7).trim();
-     if (!replyText) {
-       msg.reply('⚠️ Tulis balasan setelah perintah.\nContoh: *!balas Makasih, semangat juga!*');
-       return;
-     }
+    const replyText = msg.body.substring(7).trim();
+    if (!replyText) {
+      msg.reply('⚠️ Tulis balasan setelah perintah.\nContoh: *!balas Makasih, semangat juga!*');
+      return;
+    }
 
-     if (replyText.length > MENFESS_CONFIG.MAX_MESSAGE_LENGTH) {
-       msg.reply(`⚠️ Balasan terlalu panjang. Maksimal ${MENFESS_CONFIG.MAX_MESSAGE_LENGTH} karakter.`);
-       return;
-     }
+    if (replyText.length > MENFESS_CONFIG.MAX_MESSAGE_LENGTH) {
+      msg.reply(`⚠️ Balasan terlalu panjang. Maksimal ${MENFESS_CONFIG.MAX_MESSAGE_LENGTH} karakter.`);
+      return;
+    }
 
-     addMessageToHistory(userSession, msg.from, replyText);
+    addMessageToHistory(userSession, msg.from, replyText);
 
-     const otherUser = msg.from === session.sender ? session.receiver : session.sender;
-     
-     msg.reply('✅ *Balasan terkirim!*');
+    const otherUser = msg.from === session.sender ? session.receiver : session.sender;
+    
+    msg.reply('✅ *Balasan terkirim!*');
 
-     try {
-       await client.sendMessage(
-         otherUser,
-         `📩 *Balasan Menfess*\n━━━━━━━━━━━━━━\n💬 ${replyText}\n━━━━━━━━━━━━━━`
-       );
-     } catch (e) {
-       console.error('Balas menfess error:', e);
-       msg.reply('⚠️ Gagal mengirim balasan.');
-     }
+    try {
+      await client.sendMessage(
+        otherUser,
+        `📩 *Balasan Menfess*\n━━━━━━━━━━━━━━\n💬 ${replyText}\n━━━━━━━━━━━━━━`
+      );
+    } catch (e) {
+      console.error('Balas menfess error:', e);
+      msg.reply('⚠️ Gagal mengirim balasan.');
+    }
 
-   // ─── STOP MENFESS ──────────────────────────────────────
-   } else if (cmd === '!stopmenfess') {
-     const userSession = userSessions.get(msg.from);
-     if (!userSession) {
-       msg.reply('⚠️ Kamu tidak memiliki sesi menfess aktif.');
-       return;
-     }
+  // ─── STOP MENFESS ──────────────────────────────────────
+  } else if (cmd === '!stopmenfess') {
+    const userSession = userSessions.get(msg.from);
+    if (!userSession) {
+      msg.reply('⚠️ Kamu tidak memiliki sesi menfess aktif.');
+      return;
+    }
 
-     const session = menfessSessions.get(userSession);
-     const otherUser = msg.from === session.sender ? session.receiver : session.sender;
+    const session = menfessSessions.get(userSession);
+    const otherUser = msg.from === session.sender ? session.receiver : session.sender;
 
-     menfessSessions.delete(userSession);
-     userSessions.delete(msg.from);
-     userSessions.delete(otherUser);
-     messageHistory.delete(userSession);
+    menfessSessions.delete(userSession);
+    userSessions.delete(msg.from);
+    userSessions.delete(otherUser);
+    messageHistory.delete(userSession);
 
-     msg.reply('✅ *Sesi menfess ditutup.*\n👋 Terima kasih telah menggunakan layanan menfess!');
+    msg.reply('✅ *Sesi menfess ditutup.*\n👋 Terima kasih telah menggunakan layanan menfess!');
 
-     try {
-       await client.sendMessage(
-         otherUser,
-         `❌ *Sesi Menfess Berakhir*\nPengguna lain telah menutup sesi. Sampai jumpa!`
-       );
-     } catch (e) {
-       console.error('Stop menfess notify error:', e);
-     }
+    try {
+      await client.sendMessage(
+        otherUser,
+        `❌ *Sesi Menfess Berakhir*\nPengguna lain telah menutup sesi. Sampai jumpa!`
+      );
+    } catch (e) {
+      console.error('Stop menfess notify error:', e);
+    }
 
-   // ─── HUBUNGI DEVELOPER ───────────────────────────────
-   } else if (cmd.startsWith('!dev ')) {
+  // ─── HUBUNGI DEVELOPER ───────────────────────────────
+  } else if (cmd.startsWith('!dev ')) {
     if (!DEVELOPER_NUMBER) {
       msg.reply('⚠️ Error: Nomor developer belum diset di file .env');
       return;
@@ -403,47 +525,55 @@ client.on('message', async msg => {
       msg.reply('❌ Gagal mengirim pesan. Coba lagi nanti.');
     }
 
-   // ─── MENU / BANTUAN ──────────────────────────────────
-   } else if (cmd === '!menu' || cmd === '!bantuan') {
-     const menu = [
-       '🤖 *SatPou Bot v1.0*',
-       '━━━━━━━━━━━━━━',
-       '',
-       '🔧 *Umum*',
-       '!ping — Test koneksi bot',
-       '!halo / !hai — Sapa bot',
-       '!jam — Cek waktu & tanggal',
-       '!info — Info & uptime bot',
-       '',
-       '🎲 *Hiburan*',
-       '!dadu — Lempar dadu',
-       '!koin — Lempar koin',
-       '!random <min> <max> — Angka acak',
-       '',
-       '🛠️ *Utilitas*',
-       '!echo <teks> — Ulangi teks',
-       '!calc <ekspresi> — Kalkulator',
-       '',
-       '🖼️ *Stiker*',
-       '!stiker — Ubah gambar jadi stiker WA',
-       '         (kirim gambar + caption, atau reply gambar)',
-       '',
-       '💌 *Menfess (Anonymous Chat)*',
-       '!menfess <nomor> <pesan> — Kirim pesan anonim',
-       '!balas <pesan> — Balas menfess',
-       '!stopmenfess — Tutup sesi menfess',
-       '',
-       '📩 *Kontak*',
-       '!dev <pesan> — Kirim pesan ke developer',
-       '',
-       '❓ *Bantuan*',
-       '!menu / !bantuan — Tampilkan menu ini',
-       '',
-       '━━━━━━━━━━━━━━',
-       '💡 Contoh: !calc 10*5 | !random 1 10 | !menfess 6281234567890 Halo!',
-     ].join('\n');
-     msg.reply(menu);
-   }
+  // ─── MENU / BANTUAN ──────────────────────────────────
+  } else if (cmd === '!menu' || cmd === '!bantuan') {
+    const menu = [
+      '🤖 *SatPou Bot v1.0*',
+      '━━━━━━━━━━━━━━',
+      '',
+      '🔧 *Umum*',
+      '!ping — Test koneksi bot',
+      '!halo / !hai — Sapa bot',
+      '!jam — Cek waktu & tanggal',
+      '!info — Info & uptime bot',
+      '',
+      '🎲 *Hiburan*',
+      '!dadu — Lempar dadu',
+      '!koin — Lempar koin',
+      '!random <min> <max> — Angka acak',
+      '',
+      '🛠️ *Utilitas*',
+      '!echo <teks> — Ulangi teks',
+      '!calc <ekspresi> — Kalkulator',
+      '!qr <teks> — Buat QR Code',
+      '!short <url> — Pendekkan URL',
+      '!translate <bahasa> <teks> — Terjemahkan',
+      '',
+      '📝 *To-Do*',
+      '!todo add <tugas> — Tambah tugas',
+      '!todo list — Lihat daftar tugas',
+      '!todo done <id> — Tandai tugas selesai',
+      '',
+      '🖼️ *Stiker*',
+      '!stiker — Ubah gambar jadi stiker WA',
+      '         (kirim gambar + caption, atau reply gambar)',
+      '',
+      '💌 *Menfess (Anonymous Chat)*',
+      '!menfess <nomor> <pesan> — Kirim pesan anonim',
+      '!balas <pesan> — Balas menfess',
+      '!stopmenfess — Tutup sesi menfess',
+      '',
+      '📩 *Kontak*',
+      '!dev <pesan> — Kirim pesan ke developer',
+      '',
+      '❓ *Bantuan*',
+      '!menu / !bantuan — Tampilkan menu ini',
+      '',
+      '━━━━━━━━━━━━━━',
+      '💡 Contoh: !calc 10*5 | !qr https://github.com | !translate en Halo dunia',
+    ].join('\n');
+    msg.reply(menu);
+  }
 });
 
 client.initialize();
