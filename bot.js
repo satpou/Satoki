@@ -16,7 +16,6 @@ const DEVELOPER_NUMBER = process.env.DEVELOPER_NUMBER;
 const BOT_NAME = 'Satoki';
 
 const menfessSessions = new Map();
-const userSessions = new Map();
 const messageHistory = new Map();
 const rateLimits = new Map();
 
@@ -52,10 +51,11 @@ function checkRateLimit(userId) {
   return true;
 }
 
-function normalizeUserId(userId) {
-  if (typeof userId !== 'string') return userId;
-  let cleaned = userId.replace(/\D/g, '');
-  if (!cleaned.startsWith('62')) {
+function formatPhoneNumber(number) {
+  let cleaned = number.replace(/\D/g, '');
+  if (cleaned.startsWith('0')) {
+    cleaned = '62' + cleaned.substring(1);
+  } else if (!cleaned.startsWith('62')) {
     cleaned = '62' + cleaned;
   }
   return cleaned + '@c.us';
@@ -72,13 +72,28 @@ function addMessageToHistory(sessionId, sender, message) {
   }
 }
 
+function findMenfessSession(userId) {
+  for (const [sessionId, session] of menfessSessions.entries()) {
+    if (session.active) {
+      if (session.sender === userId || session.receiver === userId) {
+        return sessionId;
+      }
+    }
+  }
+  return null;
+}
+
+function getMenfessSession(userId) {
+  const sessionId = findMenfessSession(userId);
+  if (!sessionId) return null;
+  return menfessSessions.get(sessionId);
+}
+
 function cleanupExpiredSessions() {
   const now = Date.now();
   for (const [sessionId, session] of menfessSessions.entries()) {
     if (now - session.createdAt > MENFESS_CONFIG.SESSION_TIMEOUT) {
       menfessSessions.delete(sessionId);
-      userSessions.delete(session.sender);
-      userSessions.delete(session.receiver);
       messageHistory.delete(sessionId);
     }
   }
@@ -415,8 +430,13 @@ client.on('message', async msg => {
       return;
     }
 
-    if (userSessions.has(msg.from)) {
+    if (findMenfessSession(msg.from)) {
       msg.reply('❌ Kamu masih dalam sesi menfess sebelumnya.\nGunakan *!stopmenfess* untuk keluar terlebih dahulu.');
+      return;
+    }
+
+    if (findMenfessSession(receiverNumber)) {
+      msg.reply('❌ Penerima sedang dalam sesi menfess lain. Coba lagi nanti.');
       return;
     }
 
@@ -427,9 +447,6 @@ client.on('message', async msg => {
       createdAt: Date.now(),
       active: true
     });
-    
-    userSessions.set(msg.from, sessionId);
-    userSessions.set(receiverNumber, sessionId);
 
     msg.reply('✅ *Menfess terkirim!*\n⏳ Menunggu balasan dari penerima...');
 
@@ -438,48 +455,18 @@ client.on('message', async msg => {
         receiverNumber,
         `📨 *Menfess Baru*\n━━━━━━━━━━━━━━\n💌 ${menfessText}\n\n❓ Pengirim disembunyikan.\n\n📤 Balas dengan:\n*!balas <pesan>*\n━━━━━━━━━━━━━━`
       );
-
     } catch (e) {
       console.error('Menfess send error:', e);
       msg.reply('⚠️ Gagal mengirim menfess. Nomor tujuan mungkin tidak valid.');
       menfessSessions.delete(sessionId);
-      userSessions.delete(msg.from);
-
     }
 
   // ─── BALAS MENFESS ─────────────────────────────────────
   } else if (cmd.startsWith('!balas ')) {
-    const senderSession = userSessions.get(msg.from);
-    let userSession = senderSession;
+    const session = getMenfessSession(msg.from);
     
-    if (!userSession) {
-      const normalizedFrom = msg.from.replace(/\D/g, '');
-      const sessionKeys = [...menfessSessions.keys()];
-      for (const key of sessionKeys) {
-        const session = menfessSessions.get(key);
-        if (session.active) {
-          const senderId = session.sender.replace(/\D/g, '');
-          const receiverId = session.receiver.replace(/\D/g, '');
-          
-          if (normalizedFrom === senderId || normalizedFrom === receiverId) {
-            userSession = key;
-            if (senderSession === null) {
-              userSessions.set(msg.from, key);
-            }
-            break;
-          }
-        }
-      }
-    }
-    
-    if (!userSession) {
-      msg.reply('⚠️ Kamu tidak memiliki sesi menfess aktif.\nGunakan *!menfess <nomor> <pesan>* untuk memulai.');
-      return;
-    }
-
-    const session = menfessSessions.get(userSession);
     if (!session) {
-      msg.reply('❌ Sesi menfess sudah berakhir.');
+      msg.reply('⚠️ Kamu tidak memiliki sesi menfess aktif.\nGunakan *!menfess <nomor> <pesan>* untuk memulai.');
       return;
     }
 
@@ -494,7 +481,8 @@ client.on('message', async msg => {
       return;
     }
 
-    addMessageToHistory(userSession, msg.from, replyText);
+    const sessionId = findMenfessSession(msg.from);
+    addMessageToHistory(sessionId, msg.from, replyText);
 
     const otherUser = msg.from === session.sender ? session.receiver : session.sender;
     
@@ -511,23 +499,21 @@ client.on('message', async msg => {
     }
 
   // ─── STOP MENFESS ──────────────────────────────────────
-} else if (cmd === '!stopmenfess') {
-    const userSession = userSessions.get(msg.from);
-    if (!userSession) {
+  } else if (cmd === '!stopmenfess') {
+    const sessionId = findMenfessSession(msg.from);
+    if (!sessionId) {
       msg.reply('⚠️ Kamu tidak memiliki sesi menfess aktif.');
       return;
     }
- 
-    const session = menfessSessions.get(userSession);
+
+    const session = menfessSessions.get(sessionId);
     const otherUser = msg.from === session.sender ? session.receiver : session.sender;
- 
-    menfessSessions.delete(userSession);
-    userSessions.delete(msg.from);
-    userSessions.delete(otherUser);
-    messageHistory.delete(userSession);
- 
+
+    menfessSessions.delete(sessionId);
+    messageHistory.delete(sessionId);
+
     msg.reply('✅ *Sesi menfess ditutup.*\n👋 Terima kasih telah menggunakan layanan menfess!');
- 
+
     try {
       await client.sendMessage(
         otherUser,
