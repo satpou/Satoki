@@ -78,7 +78,7 @@
 
 ## 🔗 Tautan
 
-- Repository: [satpou-bot](https://github.com/satpou/satpou-bot)
+- Repository: [Satoki](https://github.com/satpou/Satoki)
 
 ## 📋 Lisensi
 
