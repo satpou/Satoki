@@ -10,7 +10,6 @@ require('dotenv').config();
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const QRCodeLib = require('qrcode');
-const translate = require('translate');
 
 const DEVELOPER_NUMBER = process.env.DEVELOPER_NUMBER;
 
@@ -186,8 +185,10 @@ client.on('message', async msg => {
     }
     try {
       const qrDataUrl = await QRCodeLib.toDataURL(text, { width: 300, margin: 2 });
+      const base64Data = qrDataUrl.replace(/^data:image\/png;base64,/, '');
+      const media = new MessageMedia('image/png', base64Data, 'qrcode.png');
       const chat = await msg.getChat();
-      await chat.sendMessage(MessageMedia.fromDataURL(qrDataUrl), { caption: `📱 *QR Code*\n\`\`\`${text}\`\`\`` });
+      await chat.sendMessage(media, { caption: `📱 *QR Code*\n\`\`\`${text}\`\`\`` });
     } catch (e) {
       console.error('QR error:', e);
       msg.reply('❌ Gagal membuat QR Code.');
@@ -237,14 +238,21 @@ client.on('message', async msg => {
     const targetLang = parts[0];
     const textToTranslate = parts.slice(1).join(' ');
     try {
-      translate.engine = 'google';
-      const result = await translate(textToTranslate, targetLang);
-      msg.reply(
-        `🌐 *Terjemahan*\n━━━━━━━━━━━━━━\n' +
-        '📝 Asli: ${textToTranslate}\n' +
-        '🌍 Hasil (${targetLang}): ${result}\n' +
-        '━━━━━━━━━━━━━━`
+      const response = await fetch(
+        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=auto|${targetLang}`
       );
+      const data = await response.json();
+      if (data.responseStatus === 200 && data.responseData) {
+        const translated = data.responseData.translatedText;
+        msg.reply(
+          `🌐 *Terjemahan*\n━━━━━━━━━━━━━━\n` +
+          `📝 Asli: ${textToTranslate}\n` +
+          `🌍 Hasil (${targetLang}): ${translated}\n` +
+          `━━━━━━━━━━━━━━`
+        );
+      } else {
+        msg.reply('❌ Terjemahan gagal. Coba lagi.');
+      }
     } catch (e) {
       console.error('Translate error:', e);
       msg.reply('❌ Gagal menerjemahkan. Coba lagi.');
@@ -530,7 +538,7 @@ client.on('message', async msg => {
   // ─── MENU / BANTUAN ──────────────────────────────────
   } else if (cmd === '!menu' || cmd === '!bantuan') {
     const menu = [
-      '🤖 *SatPou Bot v1.5*',
+      '🤖 *Satoki Bot v1.5*',
       '━━━━━━━━━━━━━━',
       '',
       '🔧 *Umum*',
