@@ -68,9 +68,16 @@ function addMessageToHistory(sessionId, sender, message) {
   }
 }
 
+function normalizeId(id) {
+  return id.replace(/\D/g, '');
+}
+
 function findMenfessSession(userId) {
+  const normalizedUserId = normalizeId(userId);
   for (const [sessionId, session] of menfessSessions.entries()) {
-    if (session.active && (session.sender === userId || session.receiver === userId)) {
+    const senderDigits = normalizeId(session.sender);
+    const receiverDigits = normalizeId(session.receiver);
+    if (session.active && (senderDigits === normalizedUserId || receiverDigits === normalizedUserId)) {
       return sessionId;
     }
   }
