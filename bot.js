@@ -13,6 +13,76 @@ const QRCode = require('qrcode');
 
 const DEVELOPER_NUMBER = process.env.DEVELOPER_NUMBER;
 
+const menfessSessions = new Map();
+const userSessions = new Map();
+const messageHistory = new Map();
+const rateLimits = new Map();
+
+const MENFESS_CONFIG = {
+  MAX_MESSAGE_LENGTH: 500,
+  RATE_LIMIT_MESSAGES: 5,
+  RATE_LIMIT_WINDOW: 60000,
+  SESSION_TIMEOUT: 3600000,
+  MAX_HISTORY: 50
+};
+
+function generateSessionId() {
+  return `mfs_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+function checkRateLimit(userId) {
+  const now = Date.now();
+  const userLimit = rateLimits.get(userId) || { count: 0, timestamp: now };
+  
+  if (now - userLimit.timestamp > MENFESS_CONFIG.RATE_LIMIT_WINDOW) {
+    rateLimits.set(userId, { count: 1, timestamp: now });
+    return true;
+  }
+  
+  if (userLimit.count >= MENFESS_CONFIG.RATE_LIMIT_MESSAGES) {
+    return false;
+  }
+  
+  userLimit.count++;
+  rateLimits.set(userId, userLimit);
+  return true;
+}
+
+function formatPhoneNumber(number) {
+  let cleaned = number.replace(/\D/g, '');
+  if (cleaned.startsWith('0')) {
+    cleaned = '62' + cleaned.substring(1);
+  } else if (!cleaned.startsWith('62')) {
+    cleaned = '62' + cleaned;
+  }
+  return cleaned + '@c.us';
+}
+
+function addMessageToHistory(sessionId, sender, message) {
+  if (!messageHistory.has(sessionId)) {
+    messageHistory.set(sessionId, []);
+  }
+  const history = messageHistory.get(sessionId);
+  history.push({ sender, message, timestamp: Date.now() });
+  if (history.length > MENFESS_CONFIG.MAX_HISTORY) {
+    history.shift();
+  }
+}
+
+function cleanupExpiredSessions() {
+  const now = Date.now();
+  for (const [sessionId, session] of menfessSessions.entries()) {
+    if (now - session.createdAt > MENFESS_CONFIG.SESSION_TIMEOUT) {
+      menfessSessions.delete(sessionId);
+      userSessions.delete(session.sender);
+      userSessions.delete(session.receiver);
+      messageHistory.delete(sessionId);
+    }
+  }
+}
+
+setInterval(cleanupExpiredSessions, 300000);
+
 const chromiumPath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium';
 
 const client = new Client({
@@ -181,8 +251,136 @@ client.on('message', async msg => {
       msg.reply('❌ Gagal membuat stiker. Pastikan gambar valid dan coba lagi.');
     }
 
-  // ─── HUBUNGI DEVELOPER ───────────────────────────────
-  } else if (cmd.startsWith('!dev ')) {
+   // ─── MENFESS ──────────────────────────────────────────
+   } else if (cmd.startsWith('!menfess ')) {
+     if (!checkRateLimit(msg.from)) {
+       msg.reply('⏱️ *Rate limit*\nKamu sudah mengirim banyak menfess. Tunggu sebentar.');
+       return;
+     }
+
+     const args = msg.body.split(' ');
+     if (args.length < 3) {
+       msg.reply(
+         '📨 *Format Menfess*\n' +
+         '━━━━━━━━━━━━━━\n' +
+         '!menfess <nomor> <pesan>\n\n' +
+         'Contoh:\n' +
+         '!menfess 6281234567890 Halo, semangat kuliah!\n' +
+         '━━━━━━━━━━━━━━\n' +
+         '⚠️ Nomor harus valid (62xxx)'
+       );
+       return;
+     }
+
+     const receiverNumber = formatPhoneNumber(args[1]);
+     const menfessText = msg.body.substring(msg.body.indexOf(args[2])).trim();
+
+     if (menfessText.length > MENFESS_CONFIG.MAX_MESSAGE_LENGTH) {
+       msg.reply(`⚠️ Pesan terlalu panjang. Maksimal ${MENFESS_CONFIG.MAX_MESSAGE_LENGTH} karakter.`);
+       return;
+     }
+
+     if (userSessions.has(msg.from)) {
+       msg.reply('❌ Kamu masih dalam sesi menfess sebelumnya.\nGunakan *!stopmenfess* untuk keluar terlebih dahulu.');
+       return;
+     }
+
+     const sessionId = generateSessionId();
+     menfessSessions.set(sessionId, {
+       sender: msg.from,
+       receiver: receiverNumber,
+       createdAt: Date.now(),
+       active: true
+     });
+     
+     userSessions.set(msg.from, sessionId);
+     userSessions.set(receiverNumber, sessionId);
+
+     msg.reply('✅ *Menfess terkirim!*\n⏳ Menunggu balasan dari penerima...');
+
+     try {
+       await client.sendMessage(
+         receiverNumber,
+         `📨 *Menfess Baru*\n━━━━━━━━━━━━━━\n💌 ${menfessText}\n\n❓ Pengirim disembunyikan.\n\n📤 Balas dengan:\n*!balas <pesan>*\n━━━━━━━━━━━━━━`
+       );
+     } catch (e) {
+       console.error('Menfess send error:', e);
+       msg.reply('⚠️ Gagal mengirim menfess. Nomor tujuan mungkin tidak valid.');
+       menfessSessions.delete(sessionId);
+       userSessions.delete(msg.from);
+     }
+
+   // ─── BALAS MENFESS ─────────────────────────────────────
+   } else if (cmd.startsWith('!balas ')) {
+     const userSession = userSessions.get(msg.from);
+     if (!userSession) {
+       msg.reply('⚠️ Kamu tidak memiliki sesi menfess aktif.\nGunakan *!menfess <nomor> <pesan>* untuk memulai.');
+       return;
+     }
+
+     const session = menfessSessions.get(userSession);
+     if (!session) {
+       msg.reply('❌ Sesi menfess sudah berakhir.');
+       userSessions.delete(msg.from);
+       return;
+     }
+
+     const replyText = msg.body.substring(7).trim();
+     if (!replyText) {
+       msg.reply('⚠️ Tulis balasan setelah perintah.\nContoh: *!balas Makasih, semangat juga!*');
+       return;
+     }
+
+     if (replyText.length > MENFESS_CONFIG.MAX_MESSAGE_LENGTH) {
+       msg.reply(`⚠️ Balasan terlalu panjang. Maksimal ${MENFESS_CONFIG.MAX_MESSAGE_LENGTH} karakter.`);
+       return;
+     }
+
+     addMessageToHistory(userSession, msg.from, replyText);
+
+     const otherUser = msg.from === session.sender ? session.receiver : session.sender;
+     
+     msg.reply('✅ *Balasan terkirim!*');
+
+     try {
+       await client.sendMessage(
+         otherUser,
+         `📩 *Balasan Menfess*\n━━━━━━━━━━━━━━\n💬 ${replyText}\n━━━━━━━━━━━━━━`
+       );
+     } catch (e) {
+       console.error('Balas menfess error:', e);
+       msg.reply('⚠️ Gagal mengirim balasan.');
+     }
+
+   // ─── STOP MENFESS ──────────────────────────────────────
+   } else if (cmd === '!stopmenfess') {
+     const userSession = userSessions.get(msg.from);
+     if (!userSession) {
+       msg.reply('⚠️ Kamu tidak memiliki sesi menfess aktif.');
+       return;
+     }
+
+     const session = menfessSessions.get(userSession);
+     const otherUser = msg.from === session.sender ? session.receiver : session.sender;
+
+     menfessSessions.delete(userSession);
+     userSessions.delete(msg.from);
+     userSessions.delete(otherUser);
+     messageHistory.delete(userSession);
+
+     msg.reply('✅ *Sesi menfess ditutup.*\n👋 Terima kasih telah menggunakan layanan menfess!');
+
+     try {
+       await client.sendMessage(
+         otherUser,
+         `❌ *Sesi Menfess Berakhir*\nPengguna lain telah menutup sesi. Sampai jumpa!`
+       );
+     } catch (e) {
+       console.error('Stop menfess notify error:', e);
+     }
+
+   // ─── HUBUNGI DEVELOPER ───────────────────────────────
+   } else if (cmd.startsWith('!dev ')) {
     if (!DEVELOPER_NUMBER) {
       msg.reply('⚠️ Error: Nomor developer belum diset di file .env');
       return;
@@ -205,42 +403,47 @@ client.on('message', async msg => {
       msg.reply('❌ Gagal mengirim pesan. Coba lagi nanti.');
     }
 
-  // ─── MENU / BANTUAN ──────────────────────────────────
-  } else if (cmd === '!menu' || cmd === '!bantuan') {
-    const menu = [
-      '🤖 *SatPou Bot v1.0*',
-      '━━━━━━━━━━━━━━',
-      '',
-      '🔧 *Umum*',
-      '!ping — Test koneksi bot',
-      '!halo / !hai — Sapa bot',
-      '!jam — Cek waktu & tanggal',
-      '!info — Info & uptime bot',
-      '',
-      '🎲 *Hiburan*',
-      '!dadu — Lempar dadu',
-      '!koin — Lempar koin',
-      '!random <min> <max> — Angka acak',
-      '',
-      '🛠️ *Utilitas*',
-      '!echo <teks> — Ulangi teks',
-      '!calc <ekspresi> — Kalkulator',
-      '',
-      '🖼️ *Stiker*',
-      '!stiker — Ubah gambar jadi stiker WA',
-      '         (kirim gambar + caption, atau reply gambar)',
-      '',
-      '📩 *Kontak*',
-      '!dev <pesan> — Kirim pesan ke developer',
-      '',
-      '❓ *Bantuan*',
-      '!menu / !bantuan — Tampilkan menu ini',
-      '',
-      '━━━━━━━━━━━━━━',
-      '💡 Contoh: !calc 10*5 | !random 1 10',
-    ].join('\n');
-    msg.reply(menu);
-  }
+   // ─── MENU / BANTUAN ──────────────────────────────────
+   } else if (cmd === '!menu' || cmd === '!bantuan') {
+     const menu = [
+       '🤖 *SatPou Bot v1.0*',
+       '━━━━━━━━━━━━━━',
+       '',
+       '🔧 *Umum*',
+       '!ping — Test koneksi bot',
+       '!halo / !hai — Sapa bot',
+       '!jam — Cek waktu & tanggal',
+       '!info — Info & uptime bot',
+       '',
+       '🎲 *Hiburan*',
+       '!dadu — Lempar dadu',
+       '!koin — Lempar koin',
+       '!random <min> <max> — Angka acak',
+       '',
+       '🛠️ *Utilitas*',
+       '!echo <teks> — Ulangi teks',
+       '!calc <ekspresi> — Kalkulator',
+       '',
+       '🖼️ *Stiker*',
+       '!stiker — Ubah gambar jadi stiker WA',
+       '         (kirim gambar + caption, atau reply gambar)',
+       '',
+       '💌 *Menfess (Anonymous Chat)*',
+       '!menfess <nomor> <pesan> — Kirim pesan anonim',
+       '!balas <pesan> — Balas menfess',
+       '!stopmenfess — Tutup sesi menfess',
+       '',
+       '📩 *Kontak*',
+       '!dev <pesan> — Kirim pesan ke developer',
+       '',
+       '❓ *Bantuan*',
+       '!menu / !bantuan — Tampilkan menu ini',
+       '',
+       '━━━━━━━━━━━━━━',
+       '💡 Contoh: !calc 10*5 | !random 1 10 | !menfess 6281234567890 Halo!',
+     ].join('\n');
+     msg.reply(menu);
+   }
 });
 
 client.initialize();
