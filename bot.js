@@ -19,7 +19,6 @@ const menfessSessions = new Map();
 const userSessions = new Map();
 const messageHistory = new Map();
 const rateLimits = new Map();
-const receiverSessions = new Map();
 
 const MENFESS_CONFIG = {
   MAX_MESSAGE_LENGTH: 500,
@@ -63,6 +62,15 @@ function formatPhoneNumber(number) {
   return cleaned + '@c.us';
 }
 
+function normalizeUserId(userId) {
+  if (typeof userId !== 'string') return userId;
+  let cleaned = userId.replace(/\D/g, '');
+  if (!cleaned.startsWith('62')) {
+    cleaned = '62' + cleaned;
+  }
+  return cleaned + '@c.us';
+}
+
 function addMessageToHistory(sessionId, sender, message) {
   if (!messageHistory.has(sessionId)) {
     messageHistory.set(sessionId, []);
@@ -79,9 +87,8 @@ function cleanupExpiredSessions() {
   for (const [sessionId, session] of menfessSessions.entries()) {
     if (now - session.createdAt > MENFESS_CONFIG.SESSION_TIMEOUT) {
       menfessSessions.delete(sessionId);
-      userSessions.delete(session.sender);
-      userSessions.delete(session.receiver);
-      receiverSessions.delete(session.receiver);
+      userSessions.delete(normalizeUserId(session.sender));
+      userSessions.delete(normalizeUserId(session.receiver));
       messageHistory.delete(sessionId);
     }
   }
@@ -431,8 +438,8 @@ client.on('message', async msg => {
       active: true
     });
     
-    userSessions.set(msg.from, sessionId);
-    userSessions.set(receiverNumber, sessionId);
+    userSessions.set(normalizeUserId(msg.from), sessionId);
+    userSessions.set(normalizeUserId(receiverNumber), sessionId);
 
     msg.reply('✅ *Menfess terkirim!*\n⏳ Menunggu balasan dari penerima...');
 
@@ -441,21 +448,20 @@ client.on('message', async msg => {
         receiverNumber,
         `📨 *Menfess Baru*\n━━━━━━━━━━━━━━\n💌 ${menfessText}\n\n❓ Pengirim disembunyikan.\n\n📤 Balas dengan:\n*!balas <pesan>*\n━━━━━━━━━━━━━━`
       );
-      receiverSessions.set(receiverNumber, sessionId);
+
     } catch (e) {
       console.error('Menfess send error:', e);
       msg.reply('⚠️ Gagal mengirim menfess. Nomor tujuan mungkin tidak valid.');
       menfessSessions.delete(sessionId);
       userSessions.delete(msg.from);
-      receiverSessions.delete(receiverNumber);
+
     }
 
   // ─── BALAS MENFESS ─────────────────────────────────────
   } else if (cmd.startsWith('!balas ')) {
-    let userSession = userSessions.get(msg.from);
-    if (!userSession) {
-      userSession = receiverSessions.get(msg.from);
-    }
+    const normalizedFrom = normalizeUserId(msg.from);
+    let userSession = userSessions.get(normalizedFrom);
+    
     if (!userSession) {
       msg.reply('⚠️ Kamu tidak memiliki sesi menfess aktif.\nGunakan *!menfess <nomor> <pesan>* untuk memulai.');
       return;
@@ -464,8 +470,7 @@ client.on('message', async msg => {
     const session = menfessSessions.get(userSession);
     if (!session) {
       msg.reply('❌ Sesi menfess sudah berakhir.');
-      userSessions.delete(msg.from);
-      receiverSessions.delete(msg.from);
+      userSessions.delete(normalizedFrom);
       return;
     }
 
@@ -508,9 +513,8 @@ client.on('message', async msg => {
     const otherUser = msg.from === session.sender ? session.receiver : session.sender;
 
     menfessSessions.delete(userSession);
-    userSessions.delete(msg.from);
-    userSessions.delete(otherUser);
-    receiverSessions.delete(otherUser);
+    userSessions.delete(normalizeUserId(msg.from));
+    userSessions.delete(normalizeUserId(otherUser));
     messageHistory.delete(userSession);
 
     msg.reply('✅ *Sesi menfess ditutup.*\n👋 Terima kasih telah menggunakan layanan menfess!');
