@@ -241,16 +241,17 @@ client.on('message', async msg => {
     msg.reply('⏳ Sedang menerjemahkan...');
     
     try {
-      const url =         `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=AUTO|${targetLang}`;
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(textToTranslate)}`;
       const response = await fetch(url);
       const data = await response.json();
-      
-      if (data && data.responseStatus === 200 && data.responseData && data.responseData.translatedText) {
-        const translated = data.responseData.translatedText;
+      if (data && data[0] && data[0][0] && data[0][0][0]) {
+        const translated = data[0][0][0];
+        const detectedLang = data[2] || '?';
         msg.reply(
           `🌐 *Terjemahan*\n━━━━━━━━━━━━━━\n` +
           `📝 Asli: ${textToTranslate}\n` +
           `🌍 Hasil (${targetLang}): ${translated}\n` +
+          `🔍 Bahasa terdeteksi: ${detectedLang}\n` +
           `━━━━━━━━━━━━━━`
         );
       } else {
