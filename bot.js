@@ -241,7 +241,7 @@ client.on('message', async msg => {
     msg.reply('⏳ Sedang menerjemahkan...');
     
     try {
-      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=auto|${targetLang}`;
+      const url =         `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=AUTO|${targetLang}`;
       const response = await fetch(url);
       const data = await response.json();
       
