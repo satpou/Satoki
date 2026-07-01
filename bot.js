@@ -223,7 +223,7 @@ client.on('message', async msg => {
   // ─── TRANSLATE ──────────────────────────────────────
   } else if (cmd.startsWith('!translate ')) {
     const parts = msg.body.substring(11).split(' ');
-    if (parts.length < 2) {
+    if (parts.length < 2 || !parts[0] || !parts[1]) {
       msg.reply(
         '⚠️ *Format Translate*\n━━━━━━━━━━━━━━\n' +
         '!translate <kode_bahasa> <teks>\n\n' +
@@ -237,12 +237,15 @@ client.on('message', async msg => {
     }
     const targetLang = parts[0];
     const textToTranslate = parts.slice(1).join(' ');
+    
+    msg.reply('⏳ Sedang menerjemahkan...');
+    
     try {
-      const response = await fetch(
-        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=auto|${targetLang}`
-      );
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=auto|${targetLang}`;
+      const response = await fetch(url);
       const data = await response.json();
-      if (data.responseStatus === 200 && data.responseData) {
+      
+      if (data && data.responseStatus === 200 && data.responseData && data.responseData.translatedText) {
         const translated = data.responseData.translatedText;
         msg.reply(
           `🌐 *Terjemahan*\n━━━━━━━━━━━━━━\n` +
@@ -251,7 +254,7 @@ client.on('message', async msg => {
           `━━━━━━━━━━━━━━`
         );
       } else {
-        msg.reply('❌ Terjemahan gagal. Coba lagi.');
+        msg.reply('❌ Terjemahan gagal. Coba lagi atau format salah.');
       }
     } catch (e) {
       console.error('Translate error:', e);
