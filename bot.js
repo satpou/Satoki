@@ -14,6 +14,8 @@ const translate = require('translate');
 
 const DEVELOPER_NUMBER = process.env.DEVELOPER_NUMBER;
 
+const BOT_NAME = 'Satoki';
+
 const menfessSessions = new Map();
 const userSessions = new Map();
 const messageHistory = new Map();
@@ -119,7 +121,7 @@ client.on('qr', async qr => {
 });
 
 client.on('ready', () => {
-  console.log('SatPou Bot siap!');
+  console.log(`${BOT_NAME} Bot siap!`);
 });
 
 client.on('message', async msg => {
@@ -268,7 +270,7 @@ client.on('message', async msg => {
     msg.reply(
       `🤖 *Info Bot*\n` +
       `━━━━━━━━━━━━━━\n` +
-      `📌 Nama: SatPou Bot\n` +
+      `📌 Nama: ${BOT_NAME} Bot\n` +
       `📌 Versi: 1.5.0\n` +
       `⏱️ Uptime: ${jam}j ${menit}m ${detik}d\n` +
       `━━━━━━━━━━━━━━`
@@ -364,8 +366,8 @@ client.on('message', async msg => {
       const chat = await msg.getChat();
       await chat.sendMessage(media, {
         sendMediaAsSticker: true,
-        stickerAuthor: 'SatPou Bot',
-        stickerName: 'SatPou Sticker'
+        stickerAuthor: `${BOT_NAME} Bot`,
+        stickerName: `${BOT_NAME} Sticker'`
       });
 
     } catch (e) {
