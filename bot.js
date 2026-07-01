@@ -138,6 +138,7 @@ client.on('ready', () => {
 });
 
 client.on('message', async msg => {
+  console.log(`[MSG] From: ${msg.from} | Body: ${msg.body.substring(0, 50)}`);
   const cmd = msg.body.toLowerCase();
   const args = msg.body.split(' ');
 
