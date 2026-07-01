@@ -407,7 +407,10 @@ client.on('message', async msg => {
 
     /* BALAS MENFESS */
     } else if (cmd.startsWith('!balas ')) {
+      console.log('[BALAS DEBUG] msg.from:', msg.from);
+      console.log('[BALAS DEBUG] All sessions:', JSON.stringify([...menfessSessions.entries()], null, 2));
       const sessionId = findMenfessSession(msg.from);
+      console.log('[BALAS DEBUG] Found sessionId:', sessionId);
       if (!sessionId) {
         msg.reply('⚠️ Kamu tidak memiliki sesi menfess aktif.\nGunakan *!menfess <nomor> <pesan>* untuk memulai.');
         return;
