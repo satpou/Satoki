@@ -19,6 +19,7 @@ const menfessSessions = new Map();
 const userSessions = new Map();
 const messageHistory = new Map();
 const rateLimits = new Map();
+const receiverSessions = new Map();
 
 const MENFESS_CONFIG = {
   MAX_MESSAGE_LENGTH: 500,
@@ -80,6 +81,7 @@ function cleanupExpiredSessions() {
       menfessSessions.delete(sessionId);
       userSessions.delete(session.sender);
       userSessions.delete(session.receiver);
+      receiverSessions.delete(session.receiver);
       messageHistory.delete(sessionId);
     }
   }
@@ -439,16 +441,21 @@ client.on('message', async msg => {
         receiverNumber,
         `📨 *Menfess Baru*\n━━━━━━━━━━━━━━\n💌 ${menfessText}\n\n❓ Pengirim disembunyikan.\n\n📤 Balas dengan:\n*!balas <pesan>*\n━━━━━━━━━━━━━━`
       );
+      receiverSessions.set(receiverNumber, sessionId);
     } catch (e) {
       console.error('Menfess send error:', e);
       msg.reply('⚠️ Gagal mengirim menfess. Nomor tujuan mungkin tidak valid.');
       menfessSessions.delete(sessionId);
       userSessions.delete(msg.from);
+      receiverSessions.delete(receiverNumber);
     }
 
   // ─── BALAS MENFESS ─────────────────────────────────────
   } else if (cmd.startsWith('!balas ')) {
-    const userSession = userSessions.get(msg.from);
+    let userSession = userSessions.get(msg.from);
+    if (!userSession) {
+      userSession = receiverSessions.get(msg.from);
+    }
     if (!userSession) {
       msg.reply('⚠️ Kamu tidak memiliki sesi menfess aktif.\nGunakan *!menfess <nomor> <pesan>* untuk memulai.');
       return;
@@ -458,6 +465,7 @@ client.on('message', async msg => {
     if (!session) {
       msg.reply('❌ Sesi menfess sudah berakhir.');
       userSessions.delete(msg.from);
+      receiverSessions.delete(msg.from);
       return;
     }
 
@@ -502,6 +510,7 @@ client.on('message', async msg => {
     menfessSessions.delete(userSession);
     userSessions.delete(msg.from);
     userSessions.delete(otherUser);
+    receiverSessions.delete(otherUser);
     messageHistory.delete(userSession);
 
     msg.reply('✅ *Sesi menfess ditutup.*\n👋 Terima kasih telah menggunakan layanan menfess!');
