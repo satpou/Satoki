@@ -69,7 +69,11 @@ function addMessageToHistory(sessionId, sender, message) {
 }
 
 function normalizeId(id) {
-  return id.replace(/\D/g, '');
+  // Extract phone number from both @c.us and @lid formats
+  // Example: 628128706457@c.us → 628128706457
+  // Example: 165773020557528@lid → 165773020557528
+  const match = id.match(/^(\d+)[@]/);
+  return match ? match[1] : id.replace(/\D/g, '');
 }
 
 function findMenfessSession(userId) {
