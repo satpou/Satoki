@@ -404,7 +404,7 @@ client.on('message', async msg => {
       try {
         await client.sendMessage(
           receiverNumber,
-          `📨 *Menfess Baru*\n━━━━━━━━━━━━━━\n💌 ${menfessText}\n\n❓ Pengirim disembunyikan.\n\n📤 Balas dengan:\n*!balas <pesan>*\n━━━━━━━━━━━━━━`
+          `📨 *Menfess Baru*\n━━━━━━━━━━━━━━\n💌 ${menfessText}\n\n❓ Pengirim disembunyikan.\n\n📤 Balas dengan:\n*!balas ${sessionId} <pesan>*\n\nContoh:\n*!balas ${sessionId} Makasih, semangat juga!*\n━━━━━━━━━━━━━━`
         );
       } catch (e) {
         console.error('Menfess send error:', e);
@@ -412,38 +412,53 @@ client.on('message', async msg => {
         menfessSessions.delete(sessionId);
       }
 
-    /* BALAS MENFESS */
-    } else if (cmd.startsWith('!balas ')) {
-      console.log('[BALAS DEBUG] msg.from:', msg.from);
-      console.log('[BALAS DEBUG] All sessions:', JSON.stringify([...menfessSessions.entries()], null, 2));
-      const sessionId = findMenfessSession(msg.from);
-      console.log('[BALAS DEBUG] Found sessionId:', sessionId);
-      if (!sessionId) {
-        msg.reply('⚠️ Kamu tidak memiliki sesi menfess aktif.\nGunakan *!menfess <nomor> <pesan>* untuk memulai.');
-        return;
-      }
-      const replyText = msg.body.substring(7).trim();
-      if (!replyText) {
-        msg.reply('⚠️ Tulis balasan setelah perintah.\nContoh: *!balas Makasih, semangat juga!*');
-        return;
-      }
-      if (replyText.length > MENFESS_CONFIG.MAX_MESSAGE_LENGTH) {
-        msg.reply(`⚠️ Balasan terlalu panjang. Maksimal ${MENFESS_CONFIG.MAX_MESSAGE_LENGTH} karakter.`);
-        return;
-      }
-      addMessageToHistory(sessionId, msg.from, replyText);
-      const session = menfessSessions.get(sessionId);
-      const otherUser = msg.from === session.sender ? session.receiver : session.sender;
-      msg.reply('✅ *Balasan terkirim!*');
-      try {
-        await client.sendMessage(
-          otherUser,
-          `📩 *Balasan Menfess*\n━━━━━━━━━━━━━━\n💬 ${replyText}\n━━━━━━━━━━━━━━`
-        );
-      } catch (e) {
-        console.error('Balas menfess error:', e);
-        msg.reply('⚠️ Gagal mengirim balasan.');
-      }
+     /* BALAS MENFESS */
+     } else if (cmd.startsWith('!balas ')) {
+       console.log('[BALAS DEBUG] msg.from:', msg.from);
+       console.log('[BALAS DEBUG] All sessions:', JSON.stringify([...menfessSessions.entries()], null, 2));
+       const args = msg.body.split(' ');
+       let sessionId = null;
+       let replyText = '';
+       // Support both formats: !balas <session_id> <pesan> or !balas <pesan>
+       if (args[1] && args[1].startsWith('mfs_')) {
+         // New format with explicit session ID
+         sessionId = args[1];
+         replyText = msg.body.substring(cmd.indexOf(sessionId) + sessionId.length + 1).trim();
+       } else {
+         // Old format - find session automatically
+         sessionId = findMenfessSession(msg.from);
+         replyText = cmd.substring(7).trim();
+       }
+       console.log('[BALAS DEBUG] sessionId:', sessionId);
+       if (!sessionId || !menfessSessions.has(sessionId)) {
+         msg.reply('⚠️ Tidak ada sesi menfess aktif. Gunakan *!menfess <nomor> <pesan>* untuk memulai.');
+         return;
+       }
+       const session = menfessSessions.get(sessionId);
+       if (!session.active) {
+         msg.reply('⚠️ Sesi menfess ini sudah tidak aktif.');
+         return;
+       }
+       if (!replyText) {
+         msg.reply('⚠️ Tulis balasan setelah perintah.\nContoh: *!balas Makasih, semangat juga!*');
+         return;
+       }
+       if (replyText.length > MENFESS_CONFIG.MAX_MESSAGE_LENGTH) {
+         msg.reply(`⚠️ Balasan terlalu panjang. Maksimal ${MENFESS_CONFIG.MAX_MESSAGE_LENGTH} karakter.`);
+         return;
+       }
+       addMessageToHistory(sessionId, msg.from, replyText);
+       const otherUser = msg.from === session.sender ? session.receiver : session.sender;
+       msg.reply('✅ *Balasan terkirim!*');
+       try {
+         await client.sendMessage(
+           otherUser,
+           `📩 *Balasan Menfess*\n━━━━━━━━━━━━━━\n💬 ${replyText}\n━━━━━━━━━━━━━━`
+         );
+       } catch (e) {
+         console.error('Balas menfess error:', e);
+         msg.reply('⚠️ Gagal mengirim balasan.');
+       }
 
     /* STOP MENFESS */
     } else if (cmd === '!stopmenfess') {
@@ -499,7 +514,7 @@ client.on('message', async msg => {
         '🛠️ *Utilitas*\n!echo <teks> — Ulangi teks\n!calc <ekspresi> — Kalkulator\n!qr <teks> — Buat QR Code\n!short <url> — Pendekkan URL\n!translate <bahasa> <teks> — Terjemahkan\n\n' +
         '📝 *To-Do*\n!todo add <tugas> — Tambah tugas\n!todo list — Lihat daftar tugas\n!todo done <id> — Tandai tugas selesai\n\n' +
         '🖼️ *Stiker*\n!stiker — Ubah gambar jadi stiker WA\n\n' +
-        '💌 *Menfess*\n!menfess <nomor> <pesan> — Kirim pesan anonim\n!balas <pesan> — Balas menfess\n!stopmenfess — Tutup sesi menfess\n\n' +
+         '💌 *Menfess*\n!menfess <nomor> <pesan> — Kirim pesan anonim\n!balas <session_id> <pesan> — Balas menfess (session_id ada di notif)\n!stopmenfess — Tutup sesi menfess\n\n' +
         '📩 *Kontak*\n!dev <pesan> — Kirim pesan ke developer\n\n' +
         '━━━━━━━━━━━━━━\n💡 Contoh: !calc 10*5 | !qr https://github.com | !translate en Halo dunia'
       );
