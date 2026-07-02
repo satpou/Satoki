@@ -363,6 +363,7 @@ client.on('message', async msg => {
 
     /* MENFESS */
     } else if (cmd.startsWith('!menfess ')) {
+      console.log('[MENFESS DEBUG] sender:', msg.from);
       if (!checkRateLimit(msg.from)) {
         msg.reply('⏱️ *Rate limit*\nKamu sudah mengirim banyak menfess. Tunggu sebentar.');
         return;
@@ -373,6 +374,7 @@ client.on('message', async msg => {
         return;
       }
       const receiverNumber = formatPhoneNumber(menfessArgs[1]);
+      console.log('[MENFESS DEBUG] receiver formatted:', receiverNumber);
       const menfessText = msg.body.substring(msg.body.indexOf(menfessArgs[2])).trim();
       if (menfessText.length > MENFESS_CONFIG.MAX_MESSAGE_LENGTH) {
         msg.reply(`⚠️ Pesan terlalu panjang. Maksimal ${MENFESS_CONFIG.MAX_MESSAGE_LENGTH} karakter.`);
@@ -393,6 +395,7 @@ client.on('message', async msg => {
         createdAt: Date.now(),
         active: true
       });
+      console.log('[MENFESS DEBUG] created session:', sessionId, 'sender:', msg.from, 'receiver:', receiverNumber);
       msg.reply('✅ *Menfess terkirim!*\n⏳ Menunggu balasan dari penerima...');
       try {
         await client.sendMessage(
