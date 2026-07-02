@@ -400,11 +400,11 @@ client.on('message', async msg => {
         active: true
       });
       console.log('[MENFESS DEBUG] created session:', sessionId, 'sender:', msg.from, 'receiver:', receiverNumber);
-      msg.reply('✅ *Menfess terkirim!*\n⏳ Menunggu balasan dari penerima...');
+      msg.reply(`✅ *Menfess terkirim!*\n⏳ Menunggu balasan dari penerima...\n\n📌 Session ID: \`${sessionId}\`\n\n📤 Untuk membalas nanti, gunakan:\n*!balas ${sessionId} <pesan>*`);
       try {
         await client.sendMessage(
           receiverNumber,
-          `📨 *Menfess Baru*\n━━━━━━━━━━━━━━\n💌 ${menfessText}\n\n❓ Pengirim disembunyikan.\n\n📤 Balas dengan:\n*!balas ${sessionId} <pesan>*\n\nContoh:\n*!balas ${sessionId} Makasih, semangat juga!*\n━━━━━━━━━━━━━━`
+          `📨 *Menfess Baru*\n━━━━━━━━━━━━━━\n💌 ${menfessText}\n\n❓ Pengirim disembunyikan.\n\n📌 Session ID: \`${sessionId}\`\n\n📤 Balas dengan:\n*!balas ${sessionId} <pesan>*\n\nContoh:\n*!balas ${sessionId} Makasih, semangat juga!*\n━━━━━━━━━━━━━━`
         );
       } catch (e) {
         console.error('Menfess send error:', e);
@@ -447,18 +447,18 @@ client.on('message', async msg => {
          msg.reply(`⚠️ Balasan terlalu panjang. Maksimal ${MENFESS_CONFIG.MAX_MESSAGE_LENGTH} karakter.`);
          return;
        }
-       addMessageToHistory(sessionId, msg.from, replyText);
-       const otherUser = msg.from === session.sender ? session.receiver : session.sender;
-       msg.reply('✅ *Balasan terkirim!*');
-       try {
-         await client.sendMessage(
-           otherUser,
-           `📩 *Balasan Menfess*\n━━━━━━━━━━━━━━\n💬 ${replyText}\n━━━━━━━━━━━━━━`
-         );
-       } catch (e) {
-         console.error('Balas menfess error:', e);
-         msg.reply('⚠️ Gagal mengirim balasan.');
-       }
+        addMessageToHistory(sessionId, msg.from, replyText);
+        const otherUser = msg.from === session.sender ? session.receiver : session.sender;
+        msg.reply('✅ *Balasan terkirim!*');
+        try {
+          await client.sendMessage(
+            otherUser,
+            `📩 *Balasan Menfess*\n━━━━━━━━━━━━━━\n💬 ${replyText}\n\n📌 Session ID: \`${sessionId}\`\n\n📤 Balas lagi dengan:\n*!balas ${sessionId} <pesan>*\n━━━━━━━━━━━━━━`
+          );
+        } catch (e) {
+          console.error('Balas menfess error:', e);
+          msg.reply('⚠️ Gagal mengirim balasan.');
+        }
 
     /* STOP MENFESS */
     } else if (cmd === '!stopmenfess') {
